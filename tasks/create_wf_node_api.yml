@@ -1,0 +1,65 @@
+# tasks file to create individual workflow nodes
+# `wf_id` is required (should be the Id of the workflow template we're opperating on)
+# when looped through `wf_node_to_create` should be used as a loop var
+
+- name: Get unified job termplate ID
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/unified_job_templates/?name={{ wf_node_to_create.name }}&type={{ wf_node_to_create.type }}"
+    force_basic_auth: yes
+  register: ujt_id_query
+
+- fail:
+    msg: No resource of type "{{ wf_node_to_create.type }}" with name "{{ wf_node_to_create.name }}" found
+  when: ujt_id_query.json.results == []
+
+- name: Get workflow node ID
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/workflow_job_template_nodes/?workflow_job_template={{ wf_id }}&unified_job_template={{ ujt_id_query.json.results.0.id }}"
+    force_basic_auth: yes
+  register: wf_node_id_query
+
+- name: Save workflow node ID
+  set_fact:
+    wf_node_id: "{{ wf_node_id_query.json.results.0.id | default('') }}"
+
+- name: Create workflow node
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: POST
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/workflow_job_template_nodes/"
+    force_basic_auth: yes
+    status_code:
+      - 201
+    body_format: json
+    body:
+      workflow_job_template: "{{ wf_id }}"
+      unified_job_template: "{{ ujt_id_query.json.results.0.id }}"
+  when: wf_node_id == ''
+  register: wf_node_created
+  changed_when: true
+
+- name: Save newly created workflow node ID
+  set_fact:
+    wf_node_id: "{{ wf_node_created.json.id }}"
+  when: wf_node_id == ''
+
+- name: Save workflow node ID mapping
+  set_fact:
+    wf_node_id_map: >
+      {{ wf_node_id_map | default({}) | combine({wf_node_to_create.ref_id | string: wf_node_id | string}) }}

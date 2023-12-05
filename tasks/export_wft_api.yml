@@ -1,0 +1,163 @@
+# tasks file for exporting workflow templates and storing them in a file
+# workflo template name is provided by `wf_to_export`
+# files are saved at `{{ base_dir }}/{{ wf_to_export }}.yml`
+# If `export_wf_child_jts` is `true` the names of job templates from the nodes of this WF get added to `jt_names` (to be marked for export)
+
+- name: Get workflow template ID
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/workflow_job_templates/?name={{ wf_to_export }}"
+    force_basic_auth: yes
+  register: wf_id_query
+
+- name: Save workflow template ID
+  set_fact:
+    wf_id: "{{ (wf_id_query.json.results | selectattr('name', '==', wf_to_export) | list).0.id
+      | default('') }}"
+
+- name: Fail if workflow template not found
+  fail:
+    msg: No workflow template with name "{{ wf_to_export }}" found
+  when: wf_id == ''
+
+- name: Get workflow template properties
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/workflow_job_templates/{{ wf_id }}/"
+    force_basic_auth: yes
+  register: wf_general_query
+
+- name: Get survey spec
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/workflow_job_templates/{{ wf_id }}/survey_spec/"
+    force_basic_auth: yes
+  register: wf_survey_spec_query
+
+- name: Get object role IDs
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/workflow_job_templates/{{ wf_id }}/object_roles/"
+    force_basic_auth: yes
+  register: wf_object_roles_query
+
+- name: Get teams with Admin role
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/roles/{{ role_id }}/teams/"
+    force_basic_auth: yes
+  vars:
+    role_id: "{{ (wf_object_roles_query.json.results |
+      selectattr('name', '==', 'Admin') | list).0.id }}"
+  register: wf_admin_teams_query
+
+- name: Get teams with Execute role
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/roles/{{ role_id }}/teams/"
+    force_basic_auth: yes
+  vars:
+    role_id: "{{ (wf_object_roles_query.json.results |
+      selectattr('name', '==', 'Execute') | list).0.id }}"
+  register: wf_execute_teams_query
+
+- name: Get teams with Read role
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/roles/{{ role_id }}/teams/"
+    force_basic_auth: yes
+  vars:
+    role_id: "{{ (wf_object_roles_query.json.results |
+      selectattr('name', '==', 'Read') | list).0.id }}"
+  register: wf_read_teams_query
+
+- name: Get teams with Approve role
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/roles/{{ role_id }}/teams/"
+    force_basic_auth: yes
+  vars:
+    role_id: "{{ (wf_object_roles_query.json.results |
+      selectattr('name', '==', 'Approve') | list).0.id }}"
+  register: wf_approve_teams_query
+
+- name: Get workflow nodes
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/workflow_job_templates/{{ wf_id }}/workflow_nodes/"
+    force_basic_auth: yes
+  register: wf_nodes_query
+
+- name: Get workflow node name and type
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}{{ item }}"
+    force_basic_auth: yes
+  register: wf_node_info_query
+  loop: >
+    {{ wf_nodes_query.json.results | map(attribute='related')
+    | map(attribute='unified_job_template') | list }}
+
+- name: Add job templates from workflow nodes to export list
+  set_fact:
+    jt_names: "{{ jt_names | default([]) + [ item.json.name ] }}"
+  loop: "{{ wf_node_info_query.results }}"
+  when:
+    - item.json.type == "job_template"
+    - export_wf_child_jts | bool
+
+- name: Save workflow template details to a file
+  template:
+    src: templates/workflow_template_definition.yml.j2
+    dest: "{{ base_dir }}/workflow_templates//{{ wf_to_export }}.yml"
+

@@ -1,0 +1,23 @@
+# create all job templates based on configuration files in ./job_templates/ directory
+
+- name: Create job templates
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+
+    - name: Create job templates based on config files in job_templates directory
+      include_tasks: tasks/create_jt_api.yml
+      vars:
+        jt_to_create: "{{ (lookup('file', jt_file) | from_yaml).jt_to_create }}"
+      loop: "{{ lookup('fileglob', 'job_templates/*.yml', wantlist=True) }}"
+      loop_control:
+        loop_var: jt_file
+
+    - name: Create workflow templates based on config files in workflow_templates directory
+      include_tasks: tasks/create_wft_api.yml
+      vars:
+        wf_to_create: "{{ (lookup('file', wf_file) | from_yaml).wf_to_create }}"
+      loop: "{{ lookup('fileglob', 'workflow_templates/*.yml', wantlist=True) }}"
+      loop_control:
+        loop_var: wf_file

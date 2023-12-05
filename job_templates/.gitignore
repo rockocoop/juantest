@@ -1,0 +1,5 @@
+# This is mostly here to keep this dir commited to the repo
+# We ignore everything but .yml files and this file itself
+*
+!*.yml
+!.gitignore

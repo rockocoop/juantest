@@ -1,0 +1,48 @@
+# export all job templates provided by the `jt_names` variable and store them on SFS
+
+- name: Export job templates
+  hosts: localhost
+  gather_facts: false
+  vars:
+    jt_names: "{{ [] if jt_names_text | default('') == '' else jt_names_text.split('\n') }}"
+    wf_names: "{{ [] if wf_names_text | default('') == '' else wf_names_text.split('\n') }}"
+
+  tasks:
+
+    - name: Set Default vars provided by survey
+      set_fact:
+        export_wf_child_jts: "{{ export_wf_child_jts | default(False) | bool }}"
+
+    - name: Prepare file structure for SFS upload
+      include_role:
+        name: sfs_upload
+      vars:
+        sfs_upload_stage: "prepare"
+        output_dir: /tmp/sfs_upload
+
+    - name: Make directories for Job and Workflow Templates
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: 0750
+      loop:
+        - "{{ base_dir }}/job_templates"
+        - "{{ base_dir }}/workflow_templates"
+
+    - name: Export workflow templates
+      include_tasks: tasks/export_wft_api.yml
+      loop: "{{ wf_names }}"
+      loop_control:
+        loop_var: wf_to_export
+
+    - name: Export job templates
+      include_tasks: tasks/export_jt_api.yml
+      loop: "{{ jt_names }}"
+      loop_control:
+        loop_var: jt_to_export
+
+    - name: Upload to SFS
+      include_role:
+        name: sfs_upload
+      vars:
+        sfs_upload_stage: "upload"

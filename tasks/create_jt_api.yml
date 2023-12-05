@@ -1,0 +1,320 @@
+# tasks file for crerating a job template
+# when looped through `jt_to_create` should be used as a loop var
+
+- name: Get job template ID
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/?name={{ jt_to_create.name }}"
+    force_basic_auth: yes
+  register: jt_id_query
+
+- name: Save job template ID
+  set_fact:
+    jt_id: "{{ (jt_id_query.json.results | selectattr('name', '==', jt_to_create.name) | list).0.id
+      | default('') }}"
+
+- name: Get project ID
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/projects/?name={{ jt_to_create.project }}"
+    force_basic_auth: yes
+  register: project_id_query
+
+- fail:
+    msg: No project with name "{{ jt_to_create.project }}" found
+  when: project_id_query.json.results == []
+
+- name: Get inventory ID
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/inventories/?name={{ jt_to_create.inventory }}"
+    force_basic_auth: yes
+  register: inventory_id_query
+
+- fail:
+    msg: No inventory with name "{{ jt_to_create.inventory }}" found
+  when: inventory_id_query.json.results == []
+
+- name: Create job template
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: POST
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/"
+    force_basic_auth: yes
+    status_code:
+      - 201
+    body_format: json
+    body:
+        name: "{{ jt_to_create.name }}"
+        description: "{{ jt_to_create.description }}"
+        project: "{{ project_id_query.json.results.0.id }}"
+        playbook: "{{ jt_to_create.playbook }}"
+        job_type: "{{ jt_to_create.job_type }}"
+        inventory: "{{ inventory_id_query.json.results.0.id }}"
+        limit: "{{ jt_to_create.limit }}"
+        job_tags: "{{ jt_to_create.job_tags }}"
+        skip_tags: "{{ jt_to_create.skip_tags }}"
+        forks: "{{ jt_to_create.forks | int }}"
+        verbosity: "{{ jt_to_create.verbosity | default(0) | int }}"
+
+        become_enabled: "{{ 'true' if jt_to_create.become_enabled |
+            default(False) | bool else 'false' }}"
+        diff_mode_enabled: "{{ 'true' if jt_to_create.diff_mode_enabled |
+            default(False) | bool else 'false' }}"
+        fact_caching_enabled: "{{ 'true' if jt_to_create.fact_caching_enabled |
+            default(False) | bool else 'false' }}"
+        force_handlers_enabled: "{{ 'true' if jt_to_create.force_handlers_enabled |
+            default(False) | bool else 'false' }}"
+
+        ask_credential_on_launch: "{{ 'true' if jt_to_create.ask_credential |
+            default(False) | bool else 'false' }}"
+        ask_diff_mode_on_launch: "{{ 'true' if jt_to_create.ask_diff_mode |
+            default(False) | bool else 'false' }}"
+        ask_extra_vars_on_launch: "{{ 'true' if jt_to_create.ask_extra_vars |
+            default(False) | bool else 'false' }}"
+        ask_inventory_on_launch: "{{ 'true' if jt_to_create.ask_inventory |
+            default(False) | bool else 'false' }}"
+        ask_job_type_on_launch: "{{ 'true' if jt_to_create.ask_job_type |
+            default(False) | bool else 'false' }}"
+        ask_limit_on_launch: "{{ 'true' if jt_to_create.ask_limit |
+            default(False) | bool else 'false' }}"
+        ask_skip_tags_on_launch: "{{ 'true' if jt_to_create.ask_skip_tags |
+            default(False) | bool else 'false' }}"
+        ask_tags_on_launch: "{{ 'true' if jt_to_create.ask_tags |
+            default(False) | bool else 'false' }}"
+        ask_verbosity_on_launch: "{{ 'true' if jt_to_create.ask_verbosity |
+            default(False) | bool else 'false' }}"
+
+        survey_enabled: "{{ 'true' if jt_to_create.survey_enabled |
+            default(False) | bool else 'false' }}"
+
+        extra_vars: "{{ jt_to_create.extra_vars | default({}) | to_json }}"
+
+  when: jt_id == ''
+  changed_when: true
+
+- name: Modify existing job template
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: PATCH
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/{{ jt_id }}/"
+    force_basic_auth: yes
+    status_code:
+      - 200
+    body_format: json
+    body:
+        name: "{{ jt_to_create.name }}"
+        description: "{{ jt_to_create.description }}"
+        project: "{{ project_id_query.json.results.0.id }}"
+        playbook: "{{ jt_to_create.playbook }}"
+        job_type: "{{ jt_to_create.job_type }}"
+        inventory: "{{ inventory_id_query.json.results.0.id }}"
+        limit: "{{ jt_to_create.limit }}"
+        job_tags: "{{ jt_to_create.job_tags }}"
+        skip_tags: "{{ jt_to_create.skip_tags }}"
+        forks: "{{ jt_to_create.forks | int }}"
+        verbosity: "{{ jt_to_create.verbosity | default(0) | int }}"
+
+        become_enabled: "{{ 'true' if jt_to_create.become_enabled |
+            default(False) | bool else 'false' }}"
+        diff_mode_enabled: "{{ 'true' if jt_to_create.diff_mode_enabled |
+            default(False) | bool else 'false' }}"
+        fact_caching_enabled: "{{ 'true' if jt_to_create.fact_caching_enabled |
+            default(False) | bool else 'false' }}"
+        force_handlers_enabled: "{{ 'true' if jt_to_create.force_handlers_enabled |
+            default(False) | bool else 'false' }}"
+
+        ask_credential_on_launch: "{{ 'true' if jt_to_create.ask_credential |
+            default(False) | bool else 'false' }}"
+        ask_diff_mode_on_launch: "{{ 'true' if jt_to_create.ask_diff_mode |
+            default(False) | bool else 'false' }}"
+        ask_extra_vars_on_launch: "{{ 'true' if jt_to_create.ask_extra_vars |
+            default(False) | bool else 'false' }}"
+        ask_inventory_on_launch: "{{ 'true' if jt_to_create.ask_inventory |
+            default(False) | bool else 'false' }}"
+        ask_job_type_on_launch: "{{ 'true' if jt_to_create.ask_job_type |
+            default(False) | bool else 'false' }}"
+        ask_limit_on_launch: "{{ 'true' if jt_to_create.ask_limit |
+            default(False) | bool else 'false' }}"
+        ask_skip_tags_on_launch: "{{ 'true' if jt_to_create.ask_skip_tags |
+            default(False) | bool else 'false' }}"
+        ask_tags_on_launch: "{{ 'true' if jt_to_create.ask_tags |
+            default(False) | bool else 'false' }}"
+        ask_verbosity_on_launch: "{{ 'true' if jt_to_create.ask_verbosity |
+            default(False) | bool else 'false' }}"
+
+        survey_enabled: "{{ 'true' if jt_to_create.survey_enabled |
+            default(False) | bool else 'false' }}"
+
+        extra_vars: "{{ jt_to_create.extra_vars | default({}) | to_json }}"
+
+  when: jt_id != ''
+  changed_when: true
+
+- name: Get newly created job template ID
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/?name={{ jt_to_create.name }}"
+    force_basic_auth: yes
+  register: jt_id_query
+  when: jt_id == ''
+
+- name: Save newly created job template ID
+  set_fact:
+    jt_id: "{{ (jt_id_query.json.results | selectattr('name', '==', jt_to_create.name) | list).0.id
+      | default('') }}"
+  when: jt_id == ''
+
+- name: Modify job template survey
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: POST
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/{{ jt_id }}/survey_spec/"
+    force_basic_auth: yes
+    status_code:
+      - 200
+    body_format: json
+    body: "{{ jt_to_create.survey_spec }}"
+  changed_when: true
+  when:
+    - jt_to_create.survey_spec is defined
+    - jt_to_create.survey_spec is not none
+    - jt_to_create.survey_spec != {}
+
+- name: Delete job template survey
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: DELETE
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/{{ jt_id }}/survey_spec/"
+    force_basic_auth: yes
+    status_code:
+      - 200
+  changed_when: true
+  when: >-
+    jt_to_create.survey_spec is not defined
+    or jt_to_create.survey_spec is none
+    or jt_to_create.survey_spec == {}
+
+- name: Assign Admin role to teams
+  tower_role:
+    tower_host: "{{ lookup('env', 'TOWER_HOST') }}"
+    tower_username: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    tower_password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    state: present
+
+    job_template: "{{ jt_to_create.name }}"
+    role: admin
+    team: "{{ item }}"
+  loop: "{{ jt_to_create.teams.admin | default([]) }}"
+
+
+- name: Assign Read role to teams
+  tower_role:
+    tower_host: "{{ lookup('env', 'TOWER_HOST') }}"
+    tower_username: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    tower_password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    state: present
+
+    job_template: "{{ jt_to_create.name }}"
+    role: read
+    team: "{{ item }}"
+  loop: "{{ jt_to_create.teams.read | default([]) }}"
+
+
+- name: Assign Execute role to teams
+  tower_role:
+    tower_host: "{{ lookup('env', 'TOWER_HOST') }}"
+    tower_username: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    tower_password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    state: present
+
+    job_template: "{{ jt_to_create.name }}"
+    role: execute
+    team: "{{ item }}"
+  loop: "{{ jt_to_create.teams.execute | default([]) }}"
+
+- name: Get job template credentials
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/{{ jt_id }}/credentials/"
+    force_basic_auth: yes
+  register: jt_cred_query
+
+- name: Get IDs of credentials not already associated
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/credentials/?name={{ item }}"
+    force_basic_auth: yes
+  register: cred_ids_query
+  vars:
+    jt_current_credentials: "{{ jt_cred_query.json.results | map(attribute='name') | list }}"
+  loop: "{{ jt_to_create.credentials | default({}) | difference(jt_current_credentials) }}"
+
+- name: Associate needed credentials to job template
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: POST
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/{{ jt_id }}/credentials/"
+    force_basic_auth: yes
+    body_format: json
+    body:
+      id: "{{ item }}"
+      associate: true
+    status_code:
+      - 204
+  changed_when: true
+  loop: >
+    {{ cred_ids_query.results | map(attribute='json') |
+    map(attribute='results') | map(attribute=0) |
+    map(attribute='id') | list }}
+

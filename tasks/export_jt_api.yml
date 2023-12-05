@@ -1,0 +1,113 @@
+# tasks file for exporting a job template and storing it in a file
+# job template name is provided by `jt_to_export`
+# files are saved at `{{ base_dir }}/{{ jt_to_export }}.yml`
+
+- name: Get job template ID
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/?name={{ jt_to_export }}"
+    force_basic_auth: yes
+  register: jt_id_query
+
+- name: Save job template ID
+  set_fact:
+    jt_id: "{{ (jt_id_query.json.results | selectattr('name', '==', jt_to_export) | list).0.id
+      | default('') }}"
+
+- name: Fail if job template not found
+  fail:
+    msg: No job template with name "{{ jt_to_export }}" found
+  when: jt_id == ''
+
+- name: Get job template properties
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/{{ jt_id }}"
+    force_basic_auth: yes
+  register: jt_general_query
+
+- name: Get survey spec
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/{{ jt_id }}/survey_spec"
+    force_basic_auth: yes
+  register: jt_survey_spec_query
+
+- name: Get object role IDs
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/job_templates/{{ jt_id }}/object_roles"
+    force_basic_auth: yes
+  register: jt_object_roles_query
+
+
+- name: Get teams with Admin role
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/roles/{{ role_id }}/teams"
+    force_basic_auth: yes
+  vars:
+    role_id: "{{ (jt_object_roles_query.json.results |
+      selectattr('name', '==', 'Admin') | list).0.id }}"
+  register: jt_admin_teams_query
+
+- name: Get teams with Execute role
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/roles/{{ role_id }}/teams"
+    force_basic_auth: yes
+  vars:
+    role_id: "{{ (jt_object_roles_query.json.results |
+      selectattr('name', '==', 'Execute') | list).0.id }}"
+  register: jt_execute_teams_query
+
+- name: Get teams with Read role
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/roles/{{ role_id }}/teams"
+    force_basic_auth: yes
+  vars:
+    role_id: "{{ (jt_object_roles_query.json.results |
+      selectattr('name', '==', 'Read') | list).0.id }}"
+  register: jt_read_teams_query
+
+- name: Save job template details to a file
+  template:
+    src: templates/job_template_definition.yml.j2
+    dest: "{{ base_dir }}/job_templates/{{ jt_to_export }}.yml"
+

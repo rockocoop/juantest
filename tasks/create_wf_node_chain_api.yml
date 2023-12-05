@@ -1,0 +1,89 @@
+# tasks file to build out workflow node chains (success_, failure_, allways_nodes)
+# `wf_node_to_create` - dict defining the WF node config
+# `wf_node_id_map` - dict mapping `ref_id`s to real IDs on tower
+# `wf_id` - ID of WF template
+
+- name: Define some temp vars
+  set_fact:
+    wf_node_id: "{{ wf_node_id_map[wf_node_to_create.ref_id | string] }}"
+    # defined_success_nodes shoud be this list comprehension but in j2 it's complicated
+    # [ wf_node_id_map[str(ref_id)] for ref_id in wf_node_to_create.success_nodes ]
+    defined_success_nodes: >
+      {{ wf_node_id_map | dict2items
+      | selectattr('key', 'in', wf_node_to_create.success_nodes | map('string') | list)
+      | map(attribute='value') | list }}
+    defined_failure_nodes: >
+      {{ wf_node_id_map | dict2items
+      | selectattr('key', 'in', wf_node_to_create.failure_nodes | map('string') | list)
+      | map(attribute='value') | list }}
+    defined_always_nodes: >
+      {{ wf_node_id_map | dict2items
+      | selectattr('key', 'in', wf_node_to_create.always_nodes | map('string') | list)
+      | map(attribute='value') | list }}
+
+- name: Get workflow node info
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: GET
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/workflow_job_templates/{{ wf_id }}/workflow_nodes/?id={{ wf_node_id }}"
+    force_basic_auth: yes
+  register: wf_node_info_query
+
+- name: Associate Success nodes
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: POST
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/workflow_job_template_nodes/{{ wf_node_id }}/success_nodes/"
+    force_basic_auth: yes
+    status_code:
+      - 204
+    body_format: json
+    body: '{ "id": {{ item }}, "associate": true }'
+  loop: >
+    {{ defined_success_nodes
+    | difference( wf_node_info_query.json.results.0.success_nodes | map('string') ) }}
+
+- name: Associate Failure nodes
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: POST
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/workflow_job_template_nodes/{{ wf_node_id }}/failure_nodes/"
+    force_basic_auth: yes
+    status_code:
+      - 204
+    body_format: json
+    body: '{ "id": {{ item }}, "associate": true }'
+  loop: >
+    {{ defined_failure_nodes
+    | difference( wf_node_info_query.json.results.0.failure_nodes | map('string') ) }}
+
+- name: Associate Always nodes
+  uri:
+    headers:
+      Content-type: application/json
+      Accept: application/json
+    method: POST
+    user: "{{ lookup('env', 'TOWER_USERNAME') }}"
+    password: "{{ lookup('env', 'TOWER_PASSWORD') }}"
+    url: "{{ lookup('env', 'TOWER_HOST') }}/api/v2/workflow_job_template_nodes/{{ wf_node_id }}/always_nodes/"
+    force_basic_auth: yes
+    status_code:
+      - 204
+    body_format: json
+    body: '{ "id": {{ item }}, "associate": true }'
+  loop: >
+    {{ defined_always_nodes
+    | difference( wf_node_info_query.json.results.0.always_nodes | map('string') ) }}
+

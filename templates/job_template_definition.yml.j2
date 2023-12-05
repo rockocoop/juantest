@@ -1,0 +1,39 @@
+jt_to_create:
+  name: "{{ jt_general_query.json.name }}"
+  job_type: "{{ jt_general_query.json.job_type }}"
+  project: "{{ jt_general_query.json.summary_fields.project.name }}"
+  playbook: "{{ jt_general_query.json.playbook }}"
+  description: "{{ jt_general_query.json.description }}"
+  inventory: "{{ jt_general_query.json.summary_fields.inventory.name }}"
+  limit: "{{ jt_general_query.json.limit }}"
+  verbosity: !!int {{ jt_general_query.json.verbosity }}
+  job_tags: "{{ jt_general_query.json.job_tags }}"
+  skip_tags: "{{ jt_general_query.json.skip_tags }}"
+  forks: !!int {{ jt_general_query.json.forks }}
+
+  become_enabled: !!bool {{ jt_general_query.json.become_enabled }}
+  diff_mode_enabled: !!bool {{ jt_general_query.json.diff_mode }}
+  fact_caching_enabled: !!bool {{ jt_general_query.json.use_fact_cache }}
+  force_handlers_enabled: !!bool {{ jt_general_query.json.force_handlers }}
+
+  ask_credential: !!bool {{ jt_general_query.json.ask_credential_on_launch }}
+  ask_diff_mode: !!bool {{ jt_general_query.json.ask_diff_mode_on_launch }}
+  ask_extra_vars: !!bool {{ jt_general_query.json.ask_variables_on_launch }}
+  ask_invntory: !!bool {{ jt_general_query.json.ask_inventory_on_launch }}
+  ask_job_type: !!bool {{ jt_general_query.json.ask_job_type_on_launch }}
+  ask_limit: !!bool {{ jt_general_query.json.ask_limit_on_launch }}
+  ask_skip_tags: !!bool {{ jt_general_query.json.ask_skip_tags_on_launch }}
+  ask_tags: !!bool {{ jt_general_query.json.ask_tags_on_launch }}
+  ask_verbosity: !!bool {{ jt_general_query.json.ask_verbosity_on_launch }}
+
+  survey_enabled: !!bool {{ jt_general_query.json.survey_enabled }}
+  survey_spec: {{ jt_survey_spec_query.json | to_json }}
+
+  credentials: {{ jt_general_query.json.summary_fields.credentials | map(attribute='name') | list | to_json }}
+
+  teams:
+    read: {{ jt_read_teams_query.json.results | map(attribute='name') | list | to_json }}
+    execute: {{ jt_execute_teams_query.json.results | map(attribute='name') | list | to_json }}
+    admin: {{ jt_admin_teams_query.json.results | map(attribute='name') | list | to_json }}
+
+  extra_vars: {{ jt_general_query.json.extra_vars | from_yaml | to_json }}

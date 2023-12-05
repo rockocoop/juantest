@@ -1,0 +1,38 @@
+wf_to_create:
+  name: "{{ wf_general_query.json.name }}"
+  description: "{{ wf_general_query.json.description }}"
+  inventory: "{{ wf_general_query.json.summary_fields.inventory.name | default(None) }}"
+  limit: "{{ wf_general_query.json.limit }}"
+
+  ask_extra_vars: !!bool "{{ wf_general_query.json.ask_variables_on_launch }}"
+  ask_invntory: !!bool "{{ wf_general_query.json.ask_inventory_on_launch }}"
+  ask_limit: !!bool "{{ wf_general_query.json.ask_limit_on_launch }}"
+
+  survey_enabled: !!bool "{{ wf_general_query.json.ask_limit_on_launch }}"
+  survey_spec: {{ wf_survey_spec_query.json | to_json }}
+
+  teams:
+    read: {{ wf_read_teams_query.json.results | map(attribute='name') | list | to_json }}
+    execute: {{ wf_execute_teams_query.json.results | map(attribute='name') | list | to_json }}
+    admin: {{ wf_admin_teams_query.json.results | map(attribute='name') | list | to_json }}
+    approve: {{ wf_approve_teams_query.json.results | map(attribute='name') | list | to_json }}
+
+  extra_vars: {{ wf_general_query.json.extra_vars | from_yaml | to_json }}
+
+  workflow_nodes:
+
+      # ref_id is saved simply to recunstruct success_, always_ and failiure_nodes
+      # saving this allows us to skip an API request for every item in the above lists
+      # This will not effect the resulting IDs of new resources that are deployed
+
+{% for node, unified_job_template in wf_nodes_query.json.results
+                                     | zip(wf_node_info_query.results | map(attribute='json')) %}
+    - type: "{{ unified_job_template.type }}"
+      name: "{{ unified_job_template.name }}"
+      ref_id: !!int "{{ node.id }}"
+
+      success_nodes: {{ node.success_nodes | to_json }}
+      failure_nodes: {{ node.failure_nodes | to_json }}
+      always_nodes: {{ node.always_nodes | to_json }}
+
+{% endfor %}
